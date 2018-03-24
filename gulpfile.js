@@ -110,7 +110,7 @@ gulp.task('tslint', function() {
 });
 
 gulp.task('clean', function() {
-	return del(['out/**', 'package.nls.*.json', 'vscode-node-debug2-*.vsix']);
+	return del(['out/**', 'package.nls.*.json', 'sqlops-debug-*.vsix']);
 });
 
 function verifyNotALinkedModule(modulePath) {

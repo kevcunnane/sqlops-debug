@@ -10,13 +10,13 @@ import { NodeDebugAdapter } from './nodeDebugAdapter';
 
 ChromeDebugSession.run(ChromeDebugSession.getSession(
     {
-        logFilePath: path.join(os.tmpdir(), 'vscode-node-debug2.txt'), // non-.txt file types can't be uploaded to github
+        logFilePath: path.join(os.tmpdir(), 'sqlops-debug.txt'), // non-.txt file types can't be uploaded to github
         adapter: NodeDebugAdapter,
-        extensionName: 'node-debug2',
+        extensionName: 'sqlops-debug',
         enableSourceMapCaching: true
     }));
 
 /* tslint:disable:no-var-requires */
 const debugAdapterVersion = require('../../package.json').version;
-logger.log('node-debug2: ' + debugAdapterVersion);
+logger.log('sqlops-debug: ' + debugAdapterVersion);
 telemetry.telemetry.addCustomGlobalProperty({'Versions.DebugAdapter': debugAdapterVersion});
