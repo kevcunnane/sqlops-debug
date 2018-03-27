@@ -1,4 +1,4 @@
-VS Code - Debugger for Chrome
+SQL Operations Studio Debug
 
 Copyright (c) Microsoft Corporation
 

@@ -1,15 +1,15 @@
 {
   "name": "sqlops-debug",
-  "displayName": "Sql Ops Studio Debug",
+  "displayName": "Sql Operations Studio Debug",
   "version": "1.0.0",
-  "publisher": "kevcunnane",
+  "publisher": "ms-mssql",
   "description": "%extension.description%",
   "icon": "images/node-debug-icon.png",
   "categories": [
     "Debuggers"
   ],
   "author": {
-    "name": "Kevin Cunnane"
+    "name": "SQL Operations Studio"
   },
   "license": "MIT",
   "private": true,
