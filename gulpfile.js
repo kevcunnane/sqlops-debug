@@ -20,8 +20,8 @@ const es = require('event-stream');
 const transifexApiHostname = 'www.transifex.com'
 const transifexApiName = 'api';
 const transifexApiToken = process.env.TRANSIFEX_API_TOKEN;
-const transifexProjectName = 'vscode-extensions';
-const transifexExtensionName = 'vscode-node-debug2';
+const transifexProjectName = 'sqlopsstudio';
+const transifexExtensionName = 'sqlops-debug';
 
 const defaultLanguages = [
 	{ id: 'zh-tw', folderName: 'cht', transifexId: 'zh-hant' },

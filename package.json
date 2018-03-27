@@ -58,10 +58,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Microsoft/vscode-node-debug2.git"
+    "url": "https://github.com/kevcunnane/sqlops-debug.git"
   },
   "bugs": {
-    "url": "https://github.com/Microsoft/vscode-node-debug2/issues"
+    "url": "https://github.com/kevcunnane/sqlops-debug/issues"
   },
   "contributes": {
     "breakpoints": [
@@ -75,7 +75,7 @@
     "debuggers": [
       {
         "type": "sqlopsExtensionHost",
-        "label": "VS Code Extension Development",
+        "label": "SQL Operations Studio Extension Development",
         "program": "./out/src/nodeDebug.js",
         "runtime": "node",
         "aiKey": "AIF-d9b70cd4-b9f9-4d70-929b-a071c400b217",
