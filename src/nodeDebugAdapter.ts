@@ -11,6 +11,7 @@ import { OutputEvent, CapabilitiesEvent } from 'vscode-debugadapter';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as cp from 'child_process';
+import * as os from 'os';
 
 import { ILaunchRequestArguments, IAttachRequestArguments, ICommonRequestArgs } from './nodeDebugInterfaces';
 import * as pathUtils from './pathUtils';
@@ -19,6 +20,7 @@ import * as errors from './errors';
 import * as wsl from './wslSupport';
 
 import * as nls from 'vscode-nls';
+import { LogLevel } from 'vscode-debugadapter/lib/logger';
 let localize = nls.loadMessageBundle();
 
 const DefaultSourceMapPathOverrides: ISourceMapPathOverrides = {
@@ -68,6 +70,8 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
             localize = nls.config({ locale: args.locale })();
         }
 
+        logger.setup(LogLevel.Verbose, true);
+
         const capabilities = super.initialize(args);
         capabilities.supportsLogPoints = true;
         return capabilities;
@@ -93,9 +97,34 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
             runtimeExecutable = runtimeExecutable || NodeDebugAdapter.NODE;
         } else if (runtimeExecutable) {
             if (!path.isAbsolute(runtimeExecutable)) {
-                const re = pathUtils.findOnPath(runtimeExecutable, args.env);
+                let re = pathUtils.findOnPath(runtimeExecutable, args.env);
                 if (!re) {
                     return this.getRuntimeNotOnPathErrorResponse(runtimeExecutable);
+                }
+
+                if (runtimeExecutable.toLowerCase() === 'sqlops') {
+                    // should be under a /bin directory. Walk up to find the actual path
+                    // Must transform and find the actual path
+                    let lstat: fs.Stats = fs.lstatSync(re);
+                    if (lstat && lstat.isSymbolicLink()) {
+                        let linkedPath = fs.realpathSync(re);
+                        logger.log(`linked file ${re} resolved to ${linkedPath}`);
+                        re = linkedPath;
+                    }
+                    let dir = path.normalize(path.join(path.dirname(re), '..'));
+                    logger.log(`looking for sqlops in directory ${dir}`);
+                    switch (os.platform()) {
+                        case 'darwin':
+                            re = path.join(dir, '..', '..', 'MacOS', 'Electron');
+                            break;
+                        case 'win32':
+                            re = path.join(dir, 'sqlops.exe');
+                            break;
+                        default:
+                            re = path.join(dir, 'sqlops');
+                            break;
+                    }
+                    logger.log(`sqlops path is ${re}`);
                 }
 
                 runtimeExecutable = re;
