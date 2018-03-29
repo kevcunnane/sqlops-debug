@@ -70,8 +70,6 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
             localize = nls.config({ locale: args.locale })();
         }
 
-        logger.setup(LogLevel.Verbose, true);
-
         const capabilities = super.initialize(args);
         capabilities.supportsLogPoints = true;
         return capabilities;
@@ -108,11 +106,9 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
                     let lstat: fs.Stats = fs.lstatSync(re);
                     if (lstat && lstat.isSymbolicLink()) {
                         let linkedPath = fs.realpathSync(re);
-                        logger.log(`linked file ${re} resolved to ${linkedPath}`);
                         re = linkedPath;
                     }
                     let dir = path.normalize(path.join(path.dirname(re), '..'));
-                    logger.log(`looking for sqlops in directory ${dir}`);
                     switch (os.platform()) {
                         case 'darwin':
                             re = path.join(dir, '..', '..', 'MacOS', 'Electron');
