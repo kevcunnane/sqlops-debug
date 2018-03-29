@@ -20,7 +20,6 @@ import * as errors from './errors';
 import * as wsl from './wslSupport';
 
 import * as nls from 'vscode-nls';
-import { LogLevel } from 'vscode-debugadapter/lib/logger';
 let localize = nls.loadMessageBundle();
 
 const DefaultSourceMapPathOverrides: ISourceMapPathOverrides = {
