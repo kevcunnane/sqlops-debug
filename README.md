@@ -2,6 +2,12 @@
 
 This extension forms the [SQL Operations Studio](https://docs.microsoft.com/en-us/sql/sql-operations-studio) extension debugging experience.
 
+# Release Notes
+
+## 1.0.2
+Fixed issue where use of the `sqlops` default runtimeExecutable target didn't work as expected. Testing of this has been verified on macOS and Windows, but not Linux.
+
+
 # Building and debugging an extension
 
 ## Prerequisites
