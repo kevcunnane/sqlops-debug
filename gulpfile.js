@@ -16,6 +16,7 @@ const del = require('del');
 const fs = require('fs');
 const vsce = require('vsce');
 const es = require('event-stream');
+const minimist = require('minimist');
 
 const transifexApiHostname = 'www.transifex.com'
 const transifexApiName = 'api';
@@ -81,12 +82,16 @@ function doBuild(buildNls, failOnError) {
         });
 }
 
-gulp.task('build', ['copy-scripts'], function () {
-    doBuild(true, true);
+gulp.task('build', () => {
+    return runSequence('clean', '_build');
 });
 
-gulp.task('dev-build', ['copy-scripts'], function () {
-    doBuild(false, false);
+gulp.task('_build', ['copy-scripts'], () => {
+    return doBuild(true, true);
+});
+
+gulp.task('_dev-build', ['copy-scripts'], () => {
+    return doBuild(false, false);
 });
 
 gulp.task('copy-scripts', () => {
@@ -94,9 +99,9 @@ gulp.task('copy-scripts', () => {
         .pipe(gulp.dest('out'));
 });
 
-gulp.task('watch', ['dev-build'], function(cb) {
+gulp.task('watch', ['clean'], cb => {
     log('Watching build sources...');
-    return gulp.watch(watchedSources, ['dev-build']);
+    return runSequence('_dev-build', () => gulp.watch(watchedSources, ['_dev-build']));
 });
 
 gulp.task('default', ['build']);
@@ -142,7 +147,12 @@ gulp.task('vsce-publish', function () {
     return vsce.publish();
 });
 gulp.task('vsce-package', function () {
-    return vsce.createVSIX();
+    const cliOptions = minimist(process.argv.slice(2));
+    const packageOptions = {
+        packagePath: cliOptions.packagePath
+    };
+
+    return vsce.createVSIX(packageOptions);
 });
 
 gulp.task('publish', function(callback) {

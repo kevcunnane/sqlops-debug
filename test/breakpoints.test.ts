@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as assert from 'assert';
+import * as child_process from 'child_process';
 import * as path from 'path';
 import { DebugProtocol } from 'vscode-debugprotocol';
 import * as ts from 'vscode-chrome-debug-core-testsupport';
@@ -306,6 +307,34 @@ suite('Breakpoints', () => {
 
             await dc.continueTo('breakpoint', { line: BP_LINE, path: PROGRAM });
         });
+
+        const execP = (command, options) => {
+            return new Promise((resolve, reject) => {
+                child_process.exec(command, options, (err, stdout) => {
+                    if (err) {
+                        return reject(err);
+                    }
+
+                    resolve(stdout);
+                });
+            });
+        };
+
+        test('still resolves sourcemap paths when they are absolute local paths', async () => {
+            const TEST_ROOT = path.join(DATA_ROOT, 'sourcemaps-local-paths');
+
+            await execP('npm install', { cwd: TEST_ROOT });
+            await execP('npm run postinstall', { cwd: TEST_ROOT }); // This doesn't run automatically on Linux for some reason.
+            const PROGRAM = path.join(DATA_ROOT, 'sourcemaps-local-paths/out/classes.js');
+            const TS_SOURCE = path.join(DATA_ROOT, 'sourcemaps-local-paths/src/classes.ts');
+            const TS_LINE = 17;
+
+            return dc.hitBreakpointUnverified({
+                program: PROGRAM,
+                outFiles: [path.join(DATA_ROOT, 'sourcemaps-local-paths/out/*.js')],
+                runtimeArgs: ['--nolazy']
+            }, { path: TS_SOURCE, line: TS_LINE });
+        });
     });
 
     suite('setExceptionBreakpoints', () => {
@@ -410,6 +439,22 @@ suite('Breakpoints', () => {
                 path: TS_SOURCE,
                 line: TS_LINE
             });
+        });
+    });
+
+    suite('es modules', () => {
+        test('breakpoint in es module', () => {
+            const file2 = path.join(DATA_ROOT, 'es-modules/file2.mjs');
+            const line = 1;
+
+            return dc.hitBreakpoint({
+                program: file2,
+                cwd: path.join(DATA_ROOT, 'es-modules'),
+                runtimeArgs: ['--nolazy']
+            }, {
+                    path: file2,
+                    line: line
+                });
         });
     });
 });

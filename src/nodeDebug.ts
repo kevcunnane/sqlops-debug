@@ -19,4 +19,10 @@ ChromeDebugSession.run(ChromeDebugSession.getSession(
 /* tslint:disable:no-var-requires */
 const debugAdapterVersion = require('../../package.json').version;
 logger.log('sqlops-debug: ' + debugAdapterVersion);
+
+/* __GDPR__FRAGMENT__
+   "DebugCommonProperties" : {
+      "Versions.DebugAdapter" : { "classification": "SystemMetaData", "purpose": "FeatureInsight" }
+   }
+ */
 telemetry.telemetry.addCustomGlobalProperty({'Versions.DebugAdapter': debugAdapterVersion});
