@@ -280,12 +280,11 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
         launchArgs = launchArgs.concat(runtimeArgs, programArgs);
 
         const envArgs = this.collectEnvFileArgs(args) || args.env;
-        return this.launchInInternalConsole(runtimeExecutable, launchArgs, envArgs);
-        // return this.launchInInternalConsole(runtimeExecutable, launchArgs, envArgs).then(() => {
-        //     return args.noDebug ?
-        //         Promise.resolve() :
-        //         this.doAttach(port, undefined, args.address, args.timeout);
-        // });
+        return this.launchInInternalConsole(runtimeExecutable, launchArgs, envArgs).then(() => {
+            return args.noDebug ?
+                Promise.resolve() :
+                this.doAttach(port, undefined, args.address, args.timeout);
+        });
 
     }
 
