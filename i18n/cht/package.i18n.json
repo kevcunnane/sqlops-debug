@@ -12,7 +12,7 @@
 	"node.stopOnEntry.description": "在啟動後自動停止程式。",
 	"node.port.description": "要附加到的目標偵錯連接埠。預設值為 9229。",
 	"node.address.description": "偵錯連接埠 TCP/IP 位址。預設為 'localhost'。",
-	"node.timeout.description": "重試連接到 Node.js 前要等待的毫秒數。預設值為 10000 毫秒。",
+	"node.timeout.description": "重試連接到 Node.js 前要等待的毫秒數。預設值為 30000 毫秒。",
 	"node.smartStep.description": "自動逐步所執行產生無法對應回原始碼的程式碼。",
 	"node.diagnosticLogging.description": "為 true 時，配接器記錄自己的診斷資訊至主控台",
 	"node.diagnosticLogging.deprecationMessage": "'diagnosticLogging' 已取代，請改用 'trace'。",

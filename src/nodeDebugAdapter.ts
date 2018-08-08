@@ -2,11 +2,12 @@
  * Copyright (C) Microsoft Corporation. All rights reserved.
  *--------------------------------------------------------*/
 
-import { ChromeDebugAdapter, chromeUtils, ISourceMapPathOverrides, utils as CoreUtils, logger, telemetry as CoreTelemetry, ISetBreakpointResult, ISetBreakpointsArgs, Crdp, InternalSourceBreakpoint, ChromeDebugSession } from 'vscode-chrome-debug-core';
+import { ChromeDebugAdapter, chromeUtils, ISourceMapPathOverrides, utils as CoreUtils, logger, telemetry as CoreTelemetry, ISetBreakpointResult, ISetBreakpointsArgs, Crdp, InternalSourceBreakpoint, ChromeDebugSession, IOnPausedResult } from 'vscode-chrome-debug-core';
 const telemetry = CoreTelemetry.telemetry;
 
 import { DebugProtocol } from 'vscode-debugprotocol';
 import { OutputEvent, CapabilitiesEvent } from 'vscode-debugadapter';
+import { ErrorWithMessage } from 'vscode-chrome-debug-core/out/src/errors';
 
 import * as path from 'path';
 import * as fs from 'fs';
@@ -20,6 +21,7 @@ import * as errors from './errors';
 import * as wsl from './wslSupport';
 
 import * as nls from 'vscode-nls';
+import { FinishedStartingUpEventArguments } from 'vscode-chrome-debug-core/lib/src/executionTimingsReporter';
 let localize = nls.loadMessageBundle();
 
 const DefaultSourceMapPathOverrides: ISourceMapPathOverrides = {
@@ -71,10 +73,16 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
 
         const capabilities = super.initialize(args);
         capabilities.supportsLogPoints = true;
+        capabilities.supportsTerminateRequest = process.platform !== 'win32' && !this.isExtensionHost();
+
         return capabilities;
     }
 
     public async launch(args: ILaunchRequestArguments): Promise<void> {
+        if (args.console && args.console !== 'internalConsole' && typeof args._suppressConsoleOutput === 'undefined') {
+            args._suppressConsoleOutput = true;
+        }
+
         await super.launch(args);
         if (args.__restart && typeof args.__restart.port === 'number') {
             return this.doAttach(args.__restart.port, undefined, args.address, args.timeout);
@@ -83,20 +91,20 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
         const port = args.port || utils.random(3000, 50000);
 
         if (args.useWSL && !wsl.subsystemForLinuxPresent()) {
-            return Promise.reject(<DebugProtocol.Message>{
+            return Promise.reject(new ErrorWithMessage(<DebugProtocol.Message>{
                 id: 2007,
                 format: localize('attribute.wsl.not.exist', 'Cannot find Windows Subsystem for Linux installation.')
-            });
+            }));
         }
 
         let runtimeExecutable = args.runtimeExecutable;
         if (args.useWSL) {
             runtimeExecutable = runtimeExecutable || NodeDebugAdapter.NODE;
         } else if (runtimeExecutable) {
-            if (!path.isAbsolute(runtimeExecutable)) {
-                let re = pathUtils.findOnPath(runtimeExecutable, args.env);
+            if (path.isAbsolute(runtimeExecutable)) {
+                let re = pathUtils.findExecutable(runtimeExecutable, args.env);
                 if (!re) {
-                    return this.getRuntimeNotOnPathErrorResponse(runtimeExecutable);
+                    return this.getNotExistErrorResponse('runtimeExecutable', runtimeExecutable);
                 }
 
                 if (runtimeExecutable.toLowerCase() === 'sqlops') {
@@ -124,9 +132,9 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
 
                 runtimeExecutable = re;
             } else {
-                const re = pathUtils.findExecutable(runtimeExecutable, args.env);
+                const re = pathUtils.findOnPath(runtimeExecutable, args.env);
                 if (!re) {
-                    return this.getNotExistErrorResponse('runtimeExecutable', runtimeExecutable);
+                    return this.getRuntimeNotOnPathErrorResponse(runtimeExecutable);
                 }
 
                 runtimeExecutable = re;
@@ -144,30 +152,140 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
         this._continueAfterConfigDone = !args.stopOnEntry;
 
         if (this.isExtensionHost()) {
-            // we always launch in 'debug-brk' mode, but we only show the break event if 'stopOnEntry' attribute is true.
-            let launchArgs = [];
-            if (!args.noDebug) {
-                launchArgs.push(`--debugBrkPluginHost=${port}`);
+            return this.extensionHostLaunch(args, runtimeExecutable, port);
+        }
+        return Promise.reject('Only SQL Ops Studio extension host develoment is supported');
 
-                // pass the debug session ID to the EH so that broadcast events know where they come from
-                if (args.__sessionId) {
-                    launchArgs.push(`--debugId=${args.__sessionId}`);
-                }
+        // let programPath = args.program;
+        // if (programPath) {
+        //     if (!path.isAbsolute(programPath)) {
+        //         return this.getRelativePathErrorResponse('program', programPath);
+        //     }
+
+        //     if (!fs.existsSync(programPath)) {
+        //         if (fs.existsSync(programPath + '.js')) {
+        //             programPath += '.js';
+        //         } else {
+        //             return this.getNotExistErrorResponse('program', programPath);
+        //         }
+        //     }
+
+        //     programPath = path.normalize(programPath);
+        //     if (pathUtils.normalizeDriveLetter(programPath) !== pathUtils.realPath(programPath)) {
+        //         logger.warn(localize('program.path.case.mismatch.warning', 'Program path uses differently cased character as file on disk; this might result in breakpoints not being hit.'));
+        //     }
+        // }
+
+        // this._captureFromStd = args.outputCapture === 'std';
+
+        // const resolvedProgramPath = await this.resolveProgramPath(programPath, args.sourceMaps);
+        // let program: string;
+        // let cwd = args.cwd;
+        // if (cwd) {
+        //     if (!path.isAbsolute(cwd)) {
+        //         return this.getRelativePathErrorResponse('cwd', cwd);
+        //     }
+
+        //     if (!fs.existsSync(cwd)) {
+        //         return this.getNotExistErrorResponse('cwd', cwd);
+        //     }
+
+        //     // if working dir is given and if the executable is within that folder, we make the executable path relative to the working dir
+        //     if (resolvedProgramPath) {
+        //         program = path.relative(cwd, resolvedProgramPath);
+        //     }
+        // } else if (resolvedProgramPath) {
+        //     // if no working dir given, we use the direct folder of the executable
+        //     cwd = path.dirname(resolvedProgramPath);
+        //     program = path.basename(resolvedProgramPath);
+        // }
+
+        // const runtimeArgs = args.runtimeArgs || [];
+        // const programArgs = args.args || [];
+
+        // const debugArgs = detectSupportedDebugArgsForLaunch(args, runtimeExecutable, args.env);
+        // let launchArgs = [];
+        // if (!args.noDebug && !args.port) {
+        //     // Always stop on entry to set breakpoints
+        //     if (debugArgs === DebugArgs.Inspect_DebugBrk) {
+        //         launchArgs.push(`--inspect=${port}`);
+        //         launchArgs.push('--debug-brk');
+        //     } else {
+        //         launchArgs.push(`--inspect-brk=${port}`);
+        //     }
+        // }
+
+        // launchArgs = runtimeArgs.concat(launchArgs, program ? [program] : [], programArgs);
+
+        // const wslLaunchArgs = wsl.createLaunchArg(args.useWSL, args.console === 'externalTerminal', cwd, runtimeExecutable, launchArgs, program);
+        // // if using subsystem for linux, we will trick the debugger to map source files
+        // if (args.useWSL && !args.localRoot && !args.remoteRoot) {
+        //     this._pathTransformer.attach(<IAttachRequestArguments>{
+        //         remoteRoot: wslLaunchArgs.remoteRoot,
+        //         localRoot: wslLaunchArgs.localRoot
+        //     });
+        // }
+
+        // const envArgs = this.collectEnvFileArgs(args) || args.env;
+        // if ((args.console === 'integratedTerminal' || args.console === 'externalTerminal') && this._supportsRunInTerminalRequest) {
+        //     const termArgs: DebugProtocol.RunInTerminalRequestArguments = {
+        //         kind: args.console === 'integratedTerminal' ? 'integrated' : 'external',
+        //         title: localize('node.console.title', 'Node Debug Console'),
+        //         cwd,
+        //         args: wslLaunchArgs.combined,
+        //         env: envArgs
+        //     };
+        //     await this.launchInTerminal(termArgs);
+        //     if (args.noDebug) {
+        //         this.terminateSession('cannot track process');
+        //     }
+        // } else if (!args.console || args.console === 'internalConsole') {
+        //     await this.launchInInternalConsole(wslLaunchArgs.executable, wslLaunchArgs.args, envArgs, cwd);
+        // } else {
+        //     throw errors.unknownConsoleType(args.console);
+        // }
+
+        // if (!args.noDebug) {
+        //     await this.doAttach(port, undefined, args.address, args.timeout, undefined, args.extraCRDPChannelPort);
+        // }
+    }
+
+    private extensionHostLaunch(args: ILaunchRequestArguments, runtimeExecutable: string, port: number): Promise<void> {
+        // we always launch in 'debug-brk' mode, but we only show the break event if 'stopOnEntry' attribute is true.
+        let launchArgs = [];
+        if (!args.noDebug) {
+            launchArgs.push(`--debugBrkPluginHost=${port}`);
+
+            // pass the debug session ID to the EH so that broadcast events know where they come from
+            if (args.__sessionId) {
+                launchArgs.push(`--debugId=${args.__sessionId}`);
             }
-
-            const runtimeArgs = args.runtimeArgs || [];
-            const programArgs = args.args || [];
-            launchArgs = launchArgs.concat(runtimeArgs, programArgs);
-
-            const envArgs = this.collectEnvFileArgs(args) || args.env;
-            return this.launchInInternalConsole(runtimeExecutable, launchArgs, envArgs).then(() => {
-                return args.noDebug ?
-                    Promise.resolve() :
-                    this.doAttach(port, undefined, args.address, args.timeout);
-            });
         }
 
-        return Promise.reject('Only SQL Ops Studio extension host develoment is supported');
+        const runtimeArgs = args.runtimeArgs || [];
+        const programArgs = args.args || [];
+
+        // if VS Code runs out of sources, add the path to the VS Code workspace as a first argument so that Electron turns into VS Code
+        const electronIdx = args.runtimeExecutable.indexOf(process.platform === 'win32' ? '\\.build\\electron\\' : '/.build/electron/');
+        if (electronIdx > 0 && programArgs.length > 0) {
+            // guess the VS Code workspace path
+            const vscodeWorkspacePath = args.runtimeExecutable.substr(0, electronIdx);
+
+            // only add path if user hasn't already added path
+            if (!programArgs[0].startsWith(vscodeWorkspacePath)) {
+                programArgs.unshift(vscodeWorkspacePath);
+            }
+        }
+
+        launchArgs = launchArgs.concat(runtimeArgs, programArgs);
+
+        const envArgs = this.collectEnvFileArgs(args) || args.env;
+        return this.launchInInternalConsole(runtimeExecutable, launchArgs, envArgs).then(() => {
+            return args.noDebug ?
+                Promise.resolve() :
+                this.doAttach(port, undefined, args.address, args.timeout);
+        });
+
     }
 
     public async attach(args: IAttachRequestArguments): Promise<void> {
@@ -195,7 +313,7 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
     protected hookConnectionEvents(): void {
         super.hookConnectionEvents();
 
-        this.chrome.Runtime.onExecutionContextDestroyed(params => {
+        this.chrome.Runtime.on('executionContextDestroyed', params => {
             if (params.executionContextId === 1) {
                 this.terminateSession('Program ended');
             }
@@ -203,6 +321,10 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
     }
 
     protected async doAttach(port: number, targetUrl?: string, address?: string, timeout?: number, websocketUrl?: string, extraCRDPChannelPort?: number): Promise<void> {
+        if (!timeout) {
+            // Use default timeout of 30sec
+            timeout = 30000;
+        }
         await super.doAttach(port, targetUrl, address, timeout, websocketUrl, extraCRDPChannelPort);
         this.beginWaitingForDebuggerPaused();
         this.getNodeProcessDetailsIfNeeded();
@@ -211,7 +333,7 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
     }
 
     private supportsStepBack(): boolean {
-        return this._domains.has(<keyof Crdp.CrdpClient>'TimeTravel');
+        return this._domains.has(<keyof Crdp.ProtocolApi>'TimeTravel');
     }
 
 
@@ -257,12 +379,16 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
             nodeProcess.on('exit', () => {
                 const msg = 'Target exited';
                 logger.log(msg);
-                this.terminateSession(msg);
+                if (!this.isExtensionHost()) {
+                    this.terminateSession(msg);
+                }
             });
             nodeProcess.on('close', (code) => {
                 const msg = 'Target closed';
                 logger.log(msg);
-                this.terminateSession(msg);
+                if (!this.isExtensionHost()) {
+                    this.terminateSession(msg);
+                }
             });
 
             const noDebugMode = (<ILaunchRequestArguments>this._launchAttachArgs).noDebug;
@@ -271,7 +397,7 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
 
             // Must attach a listener to stdout or process will hang on Windows
             nodeProcess.stdout.on('data', (data: string) => {
-                if (noDebugMode || this._captureFromStd) {
+                if ((noDebugMode || this._captureFromStd) && !this._launchAttachArgs._suppressConsoleOutput) {
                     let msg = data.toString();
                     this._session.sendEvent(new OutputEvent(msg, 'stdout'));
                 }
@@ -310,7 +436,7 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
                 msg = msg.replace(helpMsg, '');
             }
 
-            if (this._handlingEarlyNodeMsgs || noDebugMode || this._captureFromStd) {
+            if ((this._handlingEarlyNodeMsgs || noDebugMode || this._captureFromStd) && !this._launchAttachArgs._suppressConsoleOutput) {
                 this._session.sendEvent(new OutputEvent(msg, 'stderr'));
             }
 
@@ -386,7 +512,7 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
             await this.onPaused(this._entryPauseEvent);
         }
 
-        this.events.emit(ChromeDebugSession.FinishedStartingUpEventName);
+        this.events.emit(ChromeDebugSession.FinishedStartingUpEventName, { requestedContentWasDetected: true } as FinishedStartingUpEventArguments);
         await super.configurationDone();
     }
 
@@ -403,6 +529,12 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
         }
     }
 
+    public async terminate(args: DebugProtocol.TerminateArguments): Promise<void> {
+        if (!this._attachMode && !(<ILaunchRequestArguments>this._launchAttachArgs).useWSL && this._nodeProcessId > 0) {
+            process.kill(this._nodeProcessId, 'SIGINT');
+        }
+    }
+
     public async terminateSession(reason: string, args?: DebugProtocol.DisconnectArguments): Promise<void> {
         if (this.isExtensionHost() && args && typeof (<any>args).restart === 'boolean' && (<any>args).restart) {
             this._nodeProcessId = 0;
@@ -416,7 +548,7 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
         return super.terminateSession(reason, undefined, restartArgs);
     }
 
-    protected async onPaused(notification: Crdp.Debugger.PausedEvent, expectingStopReason = this._expectingStopReason): Promise<void> {
+    protected async onPaused(notification: Crdp.Debugger.PausedEvent, expectingStopReason = this._expectingStopReason): Promise<IOnPausedResult> {
         // If we don't have the entry location, this must be the entry pause
         if (this._waitingForEntryPauseEvent) {
             logger.log(Date.now() / 1000 + ': Paused on entry');
@@ -432,12 +564,58 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
                 this._continueAfterConfigDone = false;
             }
 
-            return this.getNodeProcessDetailsIfNeeded()
-                .then(() => this.sendInitializedEvent());
+            await this.getNodeProcessDetailsIfNeeded();
+            await this.sendInitializedEvent();
+            return { didPause: true };
         } else {
             return super.onPaused(notification, expectingStopReason);
         }
     }
+
+    // private async resolveProgramPath(programPath: string, sourceMaps: boolean): Promise<string> {
+    //     logger.verbose(`Launch: Resolving programPath: ${programPath}`);
+    //     if (!programPath) {
+    //         return programPath;
+    //     }
+
+    //     if (utils.isJavaScript(programPath)) {
+    //         if (!sourceMaps) {
+    //             return programPath;
+    //         }
+
+    //         // if programPath is a JavaScript file and sourceMaps are enabled, we don't know whether
+    //         // programPath is the generated file or whether it is the source (and we need source mapping).
+    //         // Typically this happens if a tool like 'babel' or 'uglify' is used (because they both transpile js to js).
+    //         // We use the source maps to find a 'source' file for the given js file.
+    //         const generatedPath = await this._sourceMapTransformer.getGeneratedPathFromAuthoredPath(programPath);
+    //         if (generatedPath && generatedPath !== programPath) {
+    //             // programPath must be source because there seems to be a generated file for it
+    //             logger.log(`Launch: program '${programPath}' seems to be the source; launch the generated file '${generatedPath}' instead`);
+    //             programPath = generatedPath;
+    //         } else {
+    //             logger.log(`Launch: program '${programPath}' seems to be the generated file`);
+    //         }
+
+    //         return programPath;
+    //     } else {
+    //         // node cannot execute the program directly
+    //         if (!sourceMaps) {
+    //             return Promise.reject<string>(errors.cannotLaunchBecauseSourceMaps(programPath));
+    //         }
+
+    //         const generatedPath = await this._sourceMapTransformer.getGeneratedPathFromAuthoredPath(programPath);
+    //         if (!generatedPath) { // cannot find generated file
+    //             if (this._launchAttachArgs.outFiles || this._launchAttachArgs.outDir) {
+    //                 return Promise.reject<string>(errors.cannotLaunchBecauseJsNotFound(programPath));
+    //             } else {
+    //                 return Promise.reject<string>(errors.cannotLaunchBecauseOutFiles(programPath));
+    //             }
+    //         }
+
+    //         logger.log(`Launch: program '${programPath}' seems to be the source; launch the generated file '${generatedPath}' instead`);
+    //         return generatedPath;
+    //     }
+    // }
 
     /**
      * Wait 500-5000ms for the entry pause event, and if it doesn't come, move on with life.
@@ -478,27 +656,37 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
     /**
      * Override addBreakpoints, which is called by setBreakpoints to make the actual call to Chrome.
      */
-    protected addBreakpoints(url: string, breakpoints: InternalSourceBreakpoint[]): Promise<ISetBreakpointResult[]> {
-        return super.addBreakpoints(url, breakpoints).then(responses => {
-            if (this._entryPauseEvent && !this._finishedConfig) {
-                const entryLocation = this._entryPauseEvent.callFrames[0].location;
-                const bpAtEntryLocation = responses.some(response => {
-                    // Don't compare column location, because you can have a bp at col 0, then break at some other column
-                    return response && response.actualLocation && response.actualLocation.lineNumber === entryLocation.lineNumber &&
-                        response.actualLocation.scriptId === entryLocation.scriptId;
-                });
+    protected async addBreakpoints(url: string, breakpoints: InternalSourceBreakpoint[]): Promise<ISetBreakpointResult[]> {
+        const responses = await super.addBreakpoints(url, breakpoints);
+        if (this._entryPauseEvent && !this._finishedConfig) {
+            const entryLocation = this._entryPauseEvent.callFrames[0].location;
+            const bpAtEntryLocationIdx = responses.findIndex(response => {
+                // Don't compare column location, because you can have a bp at col 0, then break at some other column
+                return response && response.actualLocation && response.actualLocation.lineNumber === entryLocation.lineNumber &&
+                    response.actualLocation.scriptId === entryLocation.scriptId;
+            });
+            const bpAtEntryLocation = bpAtEntryLocationIdx >= 0 && breakpoints[bpAtEntryLocationIdx];
 
-                if (bpAtEntryLocation) {
+            if (bpAtEntryLocation) {
+                let conditionPassed = true;
+                if (bpAtEntryLocation.condition) {
+                    const evalConditionResponse = await this.evaluateOnCallFrame(bpAtEntryLocation.condition, this._entryPauseEvent.callFrames[0]);
+                    conditionPassed = !evalConditionResponse.exceptionDetails && (!!evalConditionResponse.result.objectId || !!evalConditionResponse.result.value);
+                }
+
+                if (conditionPassed) {
                     // There is some initial breakpoint being set to the location where we stopped on entry, so need to pause even if
                     // the stopOnEntry flag is not set
                     logger.log('Got a breakpoint set in the entry location, so will stop even though stopOnEntry is not set');
                     this._continueAfterConfigDone = false;
                     this._expectingStopReason = 'breakpoint';
+                } else {
+                    logger.log('Breakpoint condition at entry location did not evaluate to truthy value');
                 }
             }
+        }
 
-            return responses;
-        });
+        return responses;
     }
 
     protected validateBreakpointsPath(args: ISetBreakpointsArgs): Promise<void> {
@@ -511,46 +699,57 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
         });
     }
 
-    private getNodeProcessDetailsIfNeeded(): Promise<void> {
+    private async getNodeProcessDetailsIfNeeded(): Promise<void> {
         if (this._loggedTargetVersion || !this.chrome) {
             return Promise.resolve();
         }
 
-        return this.chrome.Runtime.evaluate({ expression: '[process.pid, process.version, process.arch]', returnByValue: true, contextId: 1 }).then(response => {
-            if (this._loggedTargetVersion) {
-                // Possible to get two of these requests going simultaneously
-                return;
-            }
+        const response = await this.chrome.Runtime.evaluate({ expression: '[process.pid, process.version, process.arch]', returnByValue: true, contextId: 1 })
+            .catch(error => logger.error('Error evaluating `process.pid`: ' + error.message));
 
-            if (response.exceptionDetails) {
-                const description = chromeUtils.errorMessageFromExceptionDetails(response.exceptionDetails);
-                if (description.startsWith('ReferenceError: process is not defined')) {
-                    logger.verbose('Got expected exception: `process is not defined`. Will try again later.');
-                } else {
-                    logger.log('Exception evaluating `process.pid`: ' + description + '. Will try again later.');
-                }
+        if (!response) {
+            return;
+        }
+
+        if (this._loggedTargetVersion) {
+            // Possible to get two of these requests going simultaneously
+            return;
+        }
+
+        if (response.exceptionDetails) {
+            const description = chromeUtils.errorMessageFromExceptionDetails(response.exceptionDetails);
+            if (description.startsWith('ReferenceError: process is not defined')) {
+                logger.verbose('Got expected exception: `process is not defined`. Will try again later.');
             } else {
-                const [pid, version, arch] = response.result.value;
-                if (!this._nodeProcessId) {
-                    this._nodeProcessId = pid;
-                }
-
-                if (this._pollForNodeProcess) {
-                    this.startPollingForNodeTermination();
-                }
-
-                this._loggedTargetVersion = true;
-                logger.log(`Target node version: ${version} ${arch}`);
-                /* __GDPR__
-                   "nodeVersion" : {
-                      "version" : { "classification": "SystemMetaData", "purpose": "FeatureInsight" }
-                   }
-                 */
-                telemetry.reportEvent('nodeVersion', { version });
-                telemetry.addCustomGlobalProperty({ 'Versions.Target.Version': version });
+                logger.log('Exception evaluating `process.pid`: ' + description + '. Will try again later.');
             }
-        },
-        error => logger.error('Error evaluating `process.pid`: ' + error.message));
+        } else {
+            const [pid, version, arch] = response.result.value;
+            if (!this._nodeProcessId) {
+                this._nodeProcessId = pid;
+            }
+
+            if (this._pollForNodeProcess) {
+                this.startPollingForNodeTermination();
+            }
+
+            this._loggedTargetVersion = true;
+            logger.log(`Target node version: ${version} ${arch}`);
+            /* __GDPR__
+                "nodeVersion" : {
+                    "version" : { "classification": "SystemMetaData", "purpose": "FeatureInsight" },
+                    "${include}": [ "${DebugCommonProperties}" ]
+                }
+             */
+            telemetry.reportEvent('nodeVersion', { version });
+
+            /* __GDPR__FRAGMENT__
+                "DebugCommonProperties" : {
+                    "Versions.Target.Version" : { "classification": "SystemMetaData", "purpose": "FeatureInsight" }
+                }
+            */
+            telemetry.addCustomGlobalProperty({ 'Versions.Target.Version': version });
+        }
     }
 
     private startPollingForNodeTermination(): void {
@@ -596,20 +795,34 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
      * 'Path does not exist' error
      */
     private getNotExistErrorResponse(attribute: string, path: string): Promise<void> {
-        return Promise.reject(<DebugProtocol.Message>{
+        return Promise.reject(new ErrorWithMessage(<DebugProtocol.Message>{
             id: 2007,
             format: localize('attribute.path.not.exist', "Attribute '{0}' does not exist ('{1}').", attribute, '{path}'),
             variables: { path }
-        });
+        }));
     }
 
     private getRuntimeNotOnPathErrorResponse(runtime: string): Promise<void> {
-        return Promise.reject(<DebugProtocol.Message>{
+        return Promise.reject(new ErrorWithMessage(<DebugProtocol.Message>{
             id: 2001,
             format: localize('VSND2001', "Cannot find runtime '{0}' on PATH. Make sure to have '{0}' installed.", '{_runtime}'),
             variables: { _runtime: runtime }
-        });
+        }));
     }
+
+    // /**
+    //  * Send error response with 'More Information' link.
+    //  */
+    // private getErrorResponseWithInfoLink(code: number, format: string, variables: any, infoId: number): Promise<void> {
+    //     return Promise.reject(new ErrorWithMessage(<DebugProtocol.Message>{
+    //         id: code,
+    //         format,
+    //         variables,
+    //         showUser: true,
+    //         url: 'http://go.microsoft.com/fwlink/?linkID=534832#_' + infoId.toString(),
+    //         urlLabel: localize('more.information', 'More Information')
+    //     }));
+    // }
 
     protected getReadonlyOrigin(aPath: string): string {
         return path.isAbsolute(aPath) || aPath.startsWith(ChromeDebugAdapter.EVAL_NAME_PREFIX) ?
@@ -699,3 +912,40 @@ export enum DebugArgs {
     InspectBrk,
     Inspect_DebugBrk
 }
+
+// const defaultDebugArgs = DebugArgs.InspectBrk;
+// function detectSupportedDebugArgsForLaunch(config: ILaunchRequestArguments, runtimeExecutable: string, env: any): DebugArgs {
+//     if (config.__nodeVersion || (config.runtimeVersion  && config.runtimeVersion !== 'default')) {
+//         return getSupportedDebugArgsForVersion(config.__nodeVersion || config.runtimeVersion);
+//     } else if (config.runtimeExecutable) {
+//         logger.log('Using --inspect-brk because a runtimeExecutable is set');
+//         return defaultDebugArgs;
+//     } else {
+//         // only determine version if no runtimeExecutable is set (and 'node' on PATH is used)
+//         logger.log('Spawning `node --version` to determine supported debug args');
+//         let result: cp.SpawnSyncReturns<string>;
+//         try {
+//             result = cp.spawnSync(runtimeExecutable, ['--version']);
+//         } catch (e) {
+//             logger.error('Node version detection failed: ' + (e && e.message));
+//         }
+
+//         const semVerString = result.stdout ? result.stdout.toString().trim() : undefined;
+//         if (semVerString) {
+//             return getSupportedDebugArgsForVersion(semVerString);
+//         } else {
+//             logger.log('Using --inspect-brk because we couldn\'t get a version from node');
+//             return defaultDebugArgs;
+//         }
+//     }
+// }
+
+// function getSupportedDebugArgsForVersion(semVerString): DebugArgs {
+//     if (utils.compareSemver(semVerString, 'v7.6.0') >= 0) {
+//         logger.log(`Using --inspect-brk, Node version ${semVerString} detected`);
+//         return DebugArgs.InspectBrk;
+//     } else {
+//         logger.log(`Using --inspect --debug-brk, Node version ${semVerString} detected`);
+//         return DebugArgs.Inspect_DebugBrk;
+//     }
+// }

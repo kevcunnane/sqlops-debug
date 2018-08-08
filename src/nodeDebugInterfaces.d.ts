@@ -44,6 +44,7 @@ export interface ILaunchRequestArguments extends Core.ILaunchRequestArgs, ICommo
     outputCapture?: OutputCaptureType;
     /** Use Windows Subsystem for Linux */
     useWSL?: boolean;
+    runtimeVersion?: string;
 
     /** Logging options */
     diagnosticLogging?: boolean;
@@ -51,6 +52,9 @@ export interface ILaunchRequestArguments extends Core.ILaunchRequestArgs, ICommo
 
     // extensionHost option
     __sessionId?: number;
+
+    // When node version is detected by node-debug
+    __nodeVersion?: string;
 }
 
 /**
