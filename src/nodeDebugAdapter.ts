@@ -321,6 +321,10 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
     }
 
     protected async doAttach(port: number, targetUrl?: string, address?: string, timeout?: number, websocketUrl?: string, extraCRDPChannelPort?: number): Promise<void> {
+        if (!timeout) {
+            // Use default timeout of 30sec
+            timeout = 30000;
+        }
         await super.doAttach(port, targetUrl, address, timeout, websocketUrl, extraCRDPChannelPort);
         this.beginWaitingForDebuggerPaused();
         this.getNodeProcessDetailsIfNeeded();

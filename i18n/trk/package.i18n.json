@@ -12,7 +12,7 @@
 	"node.stopOnEntry.description": "Başlatıldıktan sonra programı otomatik olarak durdur.",
 	"node.port.description": "Bağlanacak hata ayıklama portu. Varsayılan 9229'dur.",
 	"node.address.description": "Hata ayıklama portunun TCP/IP adresi. Varsayılan 'localhost'tur.",
-	"node.timeout.description": "Node.js'ye yeniden bağlanmak için bu sayıda milisaniye kadar tekrar deneyin. Varsayılan 10000 ms'dir.",
+	"node.timeout.description": "Node.js'ye yeniden bağlanmak için bu sayıda milisaniye kadar tekrar deneyin. Varsayılan 30000 ms'dir.",
 	"node.smartStep.description": "Orijinal kaynağa geri eşlenemeyen oluşturulmuş kodlar üzerinde otomatik olarak adım adım ilerleyin.",
 	"node.diagnosticLogging.description": "Doğru olduğunda, bağdaştırıcı kendi tanılama bilgilerini konsola yazdırır",
 	"node.diagnosticLogging.deprecationMessage": "'diagnosticLogging' kullanım dışıdır. Bunun yerine 'trace' özniteliğini kullanın.",

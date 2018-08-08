@@ -12,7 +12,7 @@
 	"node.stopOnEntry.description": "Program automatikus leállítása indítás után.",
 	"node.port.description": "A hibakeresőhöz való csatlakozáshoz használt port. Alapértelmezett értéke 9229.",
 	"node.address.description": "A hibakeresési port TCP/IP-címe. Alapértelmezett értéke: 'localhost'.",
-	"node.timeout.description": "Meghatározza, hány ezredmásodpercig próbál kapcsolódni a Node.js-hez. Alapértelmezett értéke 10000 ms.",
+	"node.timeout.description": "Meghatározza, hány ezredmásodpercig próbál kapcsolódni a Node.js-hez. Alapértelmezett értéke 30000 ms.",
 	"node.smartStep.description": "Olyan generált kódok automatikus átugrása, amelyeknek nem sikerül visszakövetni az eredeti forrását.",
 	"node.diagnosticLogging.description": "Ha igaz, az illesztő naplózza a saját diagnosztikai információit a konzolra.",
 	"node.diagnosticLogging.deprecationMessage": "A 'diagnosticLogging' beállítás elavult. Használja helyette a 'trace' beállítást. ",

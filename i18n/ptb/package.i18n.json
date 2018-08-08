@@ -12,7 +12,7 @@
 	"node.stopOnEntry.description": "Automaticamente finaliza o programa após a execução.",
 	"node.port.description": "Porta de depuração a ser associada. Padrão é 9229.",
 	"node.address.description": "Endereço TCP/IP da porta de depuração. O padrão é 'localhost'.",
-	"node.timeout.description": "Repetir durante esta quantidade de milisegundos para conectar ao Node.js. Padrão é 10000 ms.",
+	"node.timeout.description": "Repetir durante esta quantidade de milisegundos para conectar ao Node.js. Padrão é 30000 ms.",
 	"node.smartStep.description": "Código gerado automaticamente que não pode ser mapeado de volta para o código original. ",
 	"node.diagnosticLogging.description": "Quando verdadeiro, o adaptador registra sua própria informação de diagnóstico para o console",
 	"node.diagnosticLogging.deprecationMessage": "'diagnosticLogging' foi descontinuado. Use 'trace' em vez disso.",

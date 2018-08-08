@@ -12,7 +12,7 @@
 	"node.stopOnEntry.description": "시작한 후 자동으로 프로그램을 중지합니다.",
 	"node.port.description": "연결할 디버그 포트입니다. 기본값은 9229입니다.",
 	"node.address.description": "디버그 포트의 TCP/IP 주소입니다. 기본값은 'localhost'입니다.",
-	"node.timeout.description": "이 시간(밀리초) 동안 Node.js에 연결하려고 다시 시도합니다. 기본값은 10000ms입니다.",
+	"node.timeout.description": "이 시간(밀리초) 동안 Node.js에 연결하려고 다시 시도합니다. 기본값은 30000ms입니다.",
 	"node.smartStep.description": "생성된 코드 중 원래 소스로 다시 매핑할 수 없는 코드를 단계별로 자동 실행합니다.",
 	"node.diagnosticLogging.description": "true로 설정할 경우 어댑터가 자체 진단 정보를 콘솔에 로깅",
 	"node.diagnosticLogging.deprecationMessage": "'diagnosticLogging'은 사용되지 않습니다. 'trace'를 대신 사용하세요.",

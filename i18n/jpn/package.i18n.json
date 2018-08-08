@@ -12,7 +12,7 @@
 	"node.stopOnEntry.description": "起動後、プログラムを自動的に停止します。",
 	"node.port.description": "アタッチ先のデバッグ ポート。既定は 9229 です。",
 	"node.address.description": "デバッグ ポートの TCP/IP アドレス。既定は 'localhost' です。",
-	"node.timeout.description": "このミリ秒の間、Node.js への接続を再試行します。既定値は 10000 ミリ秒です。",
+	"node.timeout.description": "このミリ秒の間、Node.js への接続を再試行します。既定値は 30000 ミリ秒です。",
 	"node.smartStep.description": "元のソースにマップし直すことができない、生成されたコードを自動的にステップ スルーします。",
 	"node.diagnosticLogging.description": "true の場合、アダプターはコンソールに診断情報を記録します",
 	"node.diagnosticLogging.deprecationMessage": "'diagnosticLogging' は非推奨です。代わりに 'trace' を使用してください。",
