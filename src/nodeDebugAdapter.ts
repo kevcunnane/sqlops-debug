@@ -14,7 +14,7 @@ import * as fs from 'fs';
 import * as cp from 'child_process';
 import * as os from 'os';
 
-import { ILaunchRequestArguments, IAttachRequestArguments, ICommonRequestArgs, ILaunchVSCodeArguments, ILaunchVSCodeArgument } from './nodeDebugInterfaces';
+import { ILaunchRequestArguments, IAttachRequestArguments, ICommonRequestArgs } from './nodeDebugInterfaces';
 import * as pathUtils from './pathUtils';
 import * as utils from './utils';
 import * as errors from './errors';
@@ -33,7 +33,7 @@ const DefaultSourceMapPathOverrides: ISourceMapPathOverrides = {
 
 export class NodeDebugAdapter extends ChromeDebugAdapter {
     private static NODE = 'node';
-    private static RUNINTERMINAL_TIMEOUT = 5000;
+    // private static RUNINTERMINAL_TIMEOUT = 5000;
     private static NODE_TERMINATION_POLL_INTERVAL = 3000;
     private static DEBUG_BRK_DEP_MSG = /\(node:\d+\) \[DEP0062\] DeprecationWarning: `node --inspect --debug-brk` is deprecated\. Please use `node --inspect-brk` instead\.\s*/;
 
