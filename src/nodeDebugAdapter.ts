@@ -84,9 +84,9 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
     }
 
     public async launch(args: ILaunchRequestArguments): Promise<void> {
-        // if (typeof args.enableSourceMapCaching !== 'boolean') {
-        //     args.enableSourceMapCaching = this.isExtensionHost();
-        // }
+        if (typeof args.enableSourceMapCaching !== 'boolean') {
+            args.enableSourceMapCaching = this.isExtensionHost();
+        }
 
         if (args.console && args.console !== 'internalConsole' && typeof args._suppressConsoleOutput === 'undefined') {
             args._suppressConsoleOutput = true;
@@ -161,7 +161,7 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
         this._continueAfterConfigDone = !args.stopOnEntry;
 
         if (this.isExtensionHost()) {
-            return this.extensionHostLaunch(args, port);
+            return this.extensionHostLaunch(args, runtimeExecutable, port);
         }
         return Promise.reject('Only Azure Data Studio extension host develoment is supported');
 
@@ -263,97 +263,99 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
         // }
     }
 
-    // private extensionHostLaunch(args: ILaunchRequestArguments, runtimeExecutable: string, port: number): Promise<void> {
-    //     // we always launch in 'debug-brk' mode, but we only show the break event if 'stopOnEntry' attribute is true.
-    //     let launchArgs = [];
-    //     if (!args.noDebug) {
-    //         launchArgs.push(`--debugBrkPluginHost=${port}`);
+    // SQL Merge note: Keeping the new code in addition to this. Would like to adopt VSCode's new Debug adapter-based
+    // implementation but it won't launch Azure Data Studio. For now, keeping old method
+    private extensionHostLaunch(args: ILaunchRequestArguments, runtimeExecutable: string, port: number): Promise<void> {
+        // we always launch in 'debug-brk' mode, but we only show the break event if 'stopOnEntry' attribute is true.
+        let launchArgs = [];
+        if (!args.noDebug) {
+            launchArgs.push(`--debugBrkPluginHost=${port}`);
 
-    //         // pass the debug session ID to the EH so that broadcast events know where they come from
-    //         if (args.__sessionId) {
-    //             launchArgs.push(`--debugId=${args.__sessionId}`);
-    //         }
-    //     }
-
-    //     const runtimeArgs = args.runtimeArgs || [];
-    //     const programArgs = args.args || [];
-
-    //     // if VS Code runs out of sources, add the path to the VS Code workspace as a first argument so that Electron turns into VS Code
-    //     const electronIdx = args.runtimeExecutable.indexOf(process.platform === 'win32' ? '\\.build\\electron\\' : '/.build/electron/');
-    //     if (electronIdx > 0 && programArgs.length > 0) {
-    //         // guess the VS Code workspace path
-    //         const vscodeWorkspacePath = args.runtimeExecutable.substr(0, electronIdx);
-
-    //         // only add path if user hasn't already added path
-    //         if (!programArgs[0].startsWith(vscodeWorkspacePath)) {
-    //             programArgs.unshift(vscodeWorkspacePath);
-    //         }
-    //     }
-
-    //     launchArgs = launchArgs.concat(runtimeArgs, programArgs);
-
-    //     const envArgs = this.collectEnvFileArgs(args) || args.env;
-    //     return this.launchInInternalConsole(runtimeExecutable, launchArgs, envArgs).then(() => {
-    //         return args.noDebug ?
-    //             Promise.resolve() :
-    //             this.doAttach(port, undefined, args.address, args.timeout);
-    //     });
-
-    // }
-
-    private extensionHostLaunch(launchArgs: ILaunchRequestArguments, debugPort: number): Promise<void> {
-
-        // Separate all "paths" from an arguments into separate attributes.
-        const args = launchArgs.args.map<ILaunchVSCodeArgument>(arg => {
-            if (arg.startsWith('-')) {
-                // arg is an option
-                const pair = arg.split('=', 2);
-                if (pair.length === 2 && fs.existsSync(pair[1])) {
-                    return { prefix: pair[0] + '=', path: pair[1] };
-                }
-                return { prefix: arg };
-            } else {
-                // arg is a path
-                try {
-                    const stat = fs.lstatSync(arg);
-                    if (stat.isDirectory()) {
-                        return { prefix: '--folder-uri=', path: arg };
-                    } else if (stat.isFile()) {
-                        return { prefix: '--file-uri=', path: arg };
-                    }
-                } catch (err) {
-                    // file not found
-                }
-                return { path: arg }; // just return the path blindly and hope for the best...
+            // pass the debug session ID to the EH so that broadcast events know where they come from
+            if (args.__sessionId) {
+                launchArgs.push(`--debugId=${args.__sessionId}`);
             }
-        });
-
-        if (!launchArgs.noDebug) {
-            args.unshift({ prefix: `--inspect-brk-extensions=${debugPort}` });
         }
 
-        args.unshift({ prefix: `--debugId=${launchArgs.__sessionId}` });  // pass the debug session ID so that broadcast events know where they come from
+        const runtimeArgs = args.runtimeArgs || [];
+        const programArgs = args.args || [];
 
-        const launchVSCodeArgs: ILaunchVSCodeArguments = {
-            args: args,
-            env: this.collectEnvFileArgs(launchArgs) || launchArgs.env
-        };
+        // if VS Code runs out of sources, add the path to the VS Code workspace as a first argument so that Electron turns into VS Code
+        const electronIdx = args.runtimeExecutable.indexOf(process.platform === 'win32' ? '\\.build\\electron\\' : '/.build/electron/');
+        if (electronIdx > 0 && programArgs.length > 0) {
+            // guess the VS Code workspace path
+            const vscodeWorkspacePath = args.runtimeExecutable.substr(0, electronIdx);
 
-        return new Promise<void>((resolve, reject) => {
-            this._session.sendRequest('launchVSCode', launchVSCodeArgs, NodeDebugAdapter.RUNINTERMINAL_TIMEOUT, response => {
-                if (response.success) {
-                    if (response.body && typeof response.body.processId === 'number') {
-                        this._nodeProcessId = response.body.processId;
-                    }
-                    resolve();
-                } else {
-                    reject(errors.cannotDebugExtension(response.message));
-                    this.terminateSession('launchVSCode error: ' + response.message);
-                }
-            });
+            // only add path if user hasn't already added path
+            if (!programArgs[0].startsWith(vscodeWorkspacePath)) {
+                programArgs.unshift(vscodeWorkspacePath);
+            }
+        }
+
+        launchArgs = launchArgs.concat(runtimeArgs, programArgs);
+
+        const envArgs = this.collectEnvFileArgs(args) || args.env;
+        return this.launchInInternalConsole(runtimeExecutable, launchArgs, envArgs).then(() => {
+            return args.noDebug ?
+                Promise.resolve() :
+                this.doAttach(port, undefined, args.address, args.timeout);
         });
 
     }
+
+    // private extensionHostLaunch(launchArgs: ILaunchRequestArguments, runtimeExecutable: string, debugPort: number): Promise<void> {
+
+    //     // Separate all "paths" from an arguments into separate attributes.
+    //     const args = launchArgs.args.map<ILaunchVSCodeArgument>(arg => {
+    //         if (arg.startsWith('-')) {
+    //             // arg is an option
+    //             const pair = arg.split('=', 2);
+    //             if (pair.length === 2 && fs.existsSync(pair[1])) {
+    //                 return { prefix: pair[0] + '=', path: pair[1] };
+    //             }
+    //             return { prefix: arg };
+    //         } else {
+    //             // arg is a path
+    //             try {
+    //                 const stat = fs.lstatSync(arg);
+    //                 if (stat.isDirectory()) {
+    //                     return { prefix: '--folder-uri=', path: arg };
+    //                 } else if (stat.isFile()) {
+    //                     return { prefix: '--file-uri=', path: arg };
+    //                 }
+    //             } catch (err) {
+    //                 // file not found
+    //             }
+    //             return { path: arg }; // just return the path blindly and hope for the best...
+    //         }
+    //     });
+
+    //     if (!launchArgs.noDebug) {
+    //         args.unshift({ prefix: `--inspect-brk-extensions=${debugPort}` });
+    //     }
+
+    //     args.unshift({ prefix: `--debugId=${launchArgs.__sessionId}` });  // pass the debug session ID so that broadcast events know where they come from
+
+    //     const launchVSCodeArgs: ILaunchVSCodeArguments = {
+    //         args: args,
+    //         env: this.collectEnvFileArgs(launchArgs) || launchArgs.env
+    //     };
+
+    //     return new Promise<void>((resolve, reject) => {
+    //         this._session.sendRequest('launchVSCode', launchVSCodeArgs, NodeDebugAdapter.RUNINTERMINAL_TIMEOUT, response => {
+    //             if (response.success) {
+    //                 if (response.body && typeof response.body.processId === 'number') {
+    //                     this._nodeProcessId = response.body.processId;
+    //                 }
+    //                 resolve();
+    //             } else {
+    //                 reject(errors.cannotDebugExtension(response.message));
+    //                 this.terminateSession('launchVSCode error: ' + response.message);
+    //             }
+    //         });
+    //     });
+
+    // }
 
     public async attach(args: IAttachRequestArguments): Promise<void> {
         try {

@@ -12,8 +12,7 @@ ChromeDebugSession.run(ChromeDebugSession.getSession(
     {
         logFilePath: path.join(os.tmpdir(), 'sqlops-debug.txt'), // non-.txt file types can't be uploaded to github
         adapter: NodeDebugAdapter,
-        extensionName: 'sqlops-debug',
-        enableSourceMapCaching: true
+        extensionName: 'sqlops-debug'
     }));
 
 /* tslint:disable:no-var-requires */
