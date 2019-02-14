@@ -1,5 +1,5 @@
 {
-	"extension.description": "SQL Ops Studio extension debugging support",
+	"extension.description": "Azure Data Studio extension debugging support",
 
 	"node.label": "Node.js v6.3+ via Inspector Protocol",
 
@@ -44,14 +44,14 @@
 	"node.processattach.config.name": "Attach to Process",
 	"toggle.skipping.this.file": "Toggle Skipping this File",
 
-	"extensionHost.label": "SQL Ops Studio Extension Development",
+	"extensionHost.label": "Azure Data Studio Extension Development",
 
-	"extensionHost.launch.runtimeExecutable.description": "Absolute path to SQL Ops Studio.",
+	"extensionHost.launch.runtimeExecutable.description": "Absolute path to Azure Data Studio.",
 	"extensionHost.launch.stopOnEntry.description": "Automatically stop the extension host after launch.",
 	"extensionHost.launch.env.description": "Environment variables passed to the extension host.",
 
-	"extensionHost.snippet.launch.label": "SQL Ops Studio Extension Development",
-	"extensionHost.snippet.launch.description": "Launch a SQL Ops Studio extension in debug mode",
+	"extensionHost.snippet.launch.label": "Azure Data Studio Extension Development",
+	"extensionHost.snippet.launch.description": "Launch an Azure Data Studio extension in debug mode",
 
 	"extensionHost.launch.config.name": "Launch Extension"
 }

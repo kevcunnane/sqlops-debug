@@ -1,4 +1,4 @@
-SQL Operations Studio Debug
+Azure Data Studio Debug
 
 Copyright (c) Microsoft Corporation
 

@@ -1,7 +1,7 @@
 {
   "name": "sqlops-debug",
-  "displayName": "Sql Operations Studio Debug",
-  "version": "1.1.0",
+  "displayName": "Azure Data Studio Debug",
+  "version": "1.2.0",
   "publisher": "ms-mssql",
   "description": "%extension.description%",
   "icon": "images/node-debug-icon.png",
@@ -9,7 +9,7 @@
     "Debuggers"
   ],
   "author": {
-    "name": "SQL Operations Studio"
+    "name": "Azure Data Studio"
   },
   "license": "MIT",
   "private": true,
@@ -76,7 +76,7 @@
     "debuggers": [
       {
         "type": "sqlopsExtensionHost",
-        "label": "SQL Operations Studio Extension Development",
+        "label": "Azure Data Studio Extension Development",
         "program": "./out/src/nodeDebug.js",
         "runtime": "node",
         "aiKey": "AIF-d9b70cd4-b9f9-4d70-929b-a071c400b217",
@@ -88,7 +88,7 @@
               "type": "extensionHost",
               "request": "launch",
               "name": "%extensionHost.launch.config.name%",
-              "runtimeExecutable": "^\"\\sqlops\"",
+              "runtimeExecutable": "^\"\\azuredatastudio\"",
               "args": [
                 "^\"--extensionDevelopmentPath=\\${workspaceFolder}\""
               ],

@@ -154,7 +154,7 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
         if (this.isExtensionHost()) {
             return this.extensionHostLaunch(args, runtimeExecutable, port);
         }
-        return Promise.reject('Only SQL Ops Studio extension host develoment is supported');
+        return Promise.reject('Only Azure Data Studio extension host develoment is supported');
 
         // let programPath = args.program;
         // if (programPath) {
