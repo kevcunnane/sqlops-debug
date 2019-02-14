@@ -3,7 +3,6 @@
  *--------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import * as Core from 'vscode-chrome-debug-core';
 
 export function activate(context: vscode.ExtensionContext) {
 }
