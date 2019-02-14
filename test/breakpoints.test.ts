@@ -396,6 +396,48 @@ suite('Breakpoints', () => {
                 dc.assertStoppedLocation('exception', { path: PROGRAM, line: UNCAUGHT_EXCEPTION_LINE } )
             ]);
         });
+
+        test('should not stop on exception in <node_internals> when skipFiles is used', async () => {
+            const program = path.join(DATA_ROOT, 'nodeInternalsCaughtException.js');
+
+            return Promise.all([
+                dc.waitForEvent('initialized').then(event => {
+                    return dc.setExceptionBreakpointsRequest({
+                        filters: ['all']
+                    });
+                }).then(response => {
+                    return dc.setBreakpointsRequest({ source: { path: program }, breakpoints: [{ line: 7 }]});
+                }).then(() => {
+                    return dc.configurationDoneRequest();
+                }),
+
+                dc.launch({ program, skipFiles: ['<node_internals>/**'] }),
+
+                // assert that we did not stop on the exception, but stopped on the breakpoint
+                dc.assertStoppedLocation('breakpoint', { path: program, line: 7 })
+            ]);
+        });
+
+        test('should still stop on exception in user code when skipFiles is used with <node_internals>', async () => {
+            const program = path.join(DATA_ROOT, 'programWithException.js');
+
+            return Promise.all([
+                dc.waitForEvent('initialized').then(event => {
+                    return dc.setExceptionBreakpointsRequest({
+                        filters: ['all']
+                    });
+                }).then(response => {
+                    return dc.setBreakpointsRequest({ source: { path: program }, breakpoints: [{ line: 11 }] });
+                }).then(() => {
+                    return dc.configurationDoneRequest();
+                }),
+
+                dc.launch({ program, skipFiles: ['<node_internals>/**'] }),
+
+                // assert that we did not stop on the exception, but stopped on the breakpoint
+                dc.assertStoppedLocation('exception', { path: program, line: 6 })
+            ]);
+        });
     });
 
     suite('exception scope', () => {
@@ -452,9 +494,68 @@ suite('Breakpoints', () => {
                 cwd: path.join(DATA_ROOT, 'es-modules'),
                 runtimeArgs: ['--nolazy']
             }, {
-                    path: file2,
-                    line: line
-                });
+                path: file2,
+                line: line
+            });
+        });
+    });
+
+    suite('symlinks', () => {
+        test('breakpoint in symlinked library module', () => {
+            if (process.platform === 'win32') {
+                return Promise.resolve();
+            }
+
+            const main = path.join(DATA_ROOT, 'symlinked-file/main.js');
+            const file2 = path.join(DATA_ROOT, 'symlinked-file/symlinkToSrc/file.js');
+            const line = 1;
+
+            return dc.hitBreakpointUnverified({
+                program: main,
+                cwd: path.join(DATA_ROOT, 'symlinked-file'),
+                runtimeArgs: ['--nolazy', '--preserve-symlinks']
+            }, {
+                path: file2,
+                line: line
+            });
+        });
+
+        test('breakpoint in symlinked main module', () => {
+            if (utils.compareSemver(process.version, 'v10.0.0') < 0 || process.platform === 'win32') {
+                // --preserve-symlinks-main only supported after Node 10
+                return Promise.resolve();
+            }
+
+            const main = path.join(DATA_ROOT, 'symlinked-file/symlinkToSrc/file.js');
+            const line = 1;
+
+            return dc.hitBreakpointUnverified({
+                program: main,
+                cwd: path.join(DATA_ROOT, 'symlinked-file'),
+                runtimeArgs: ['--nolazy', '--preserve-symlinks', '--preserve-symlinks-main']
+            }, {
+                path: main,
+                line: line
+            });
+        });
+
+        test('breakpoint in symlinked cwd', () => {
+            if (utils.compareSemver(process.version, 'v10.0.0') < 0 || process.platform === 'win32') {
+                // --preserve-symlinks-main only supported after Node 10
+                return Promise.resolve();
+            }
+
+            const main = path.join(DATA_ROOT, 'symlinked-file/symlinkToSrc/file.js');
+            const line = 1;
+
+            return dc.hitBreakpointUnverified({
+                program: main,
+                cwd: path.join(DATA_ROOT, 'symlinked-file/symlinkToSrc'),
+                runtimeArgs: ['--nolazy', '--preserve-symlinks', '--preserve-symlinks-main']
+            }, {
+                path: main,
+                line: line
+            });
         });
     });
 });

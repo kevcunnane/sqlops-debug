@@ -17,6 +17,9 @@ export interface ICommonRequestArgs extends Core.ICommonRequestArgs {
     cwd?: string;
     /** Request frontend to restart session on termination. */
     restart?: boolean;
+
+    /** Don't set breakpoints in JS files that don't have sourcemaps */
+    disableOptimisticBPs?: boolean;
 }
 
 /**
@@ -51,7 +54,7 @@ export interface ILaunchRequestArguments extends Core.ILaunchRequestArgs, ICommo
     verboseDiagnosticLogging?: boolean;
 
     // extensionHost option
-    __sessionId?: number;
+    __sessionId?: string;
 
     // When node version is detected by node-debug
     __nodeVersion?: string;
@@ -67,6 +70,21 @@ export interface IAttachRequestArguments extends Core.IAttachRequestArgs, ICommo
     localRoot?: string;
     /** Send a USR1 signal to this process. */
     processId?: string;
+}
+
+/**
+ * This interface represents a single command line argument split into a "prefix" and a "path" half.
+ * The optional "prefix" contains arbitrary text and the optional "path" contains a file system path.
+ * Concatenating both results in the original command line argument.
+ */
+export interface ILaunchVSCodeArgument {
+    prefix?: string;
+    path?: string;
+}
+
+export interface ILaunchVSCodeArguments {
+    args: ILaunchVSCodeArgument[];
+    env?: { [key: string]: string | null; };
 }
 
 export type NodeDebugError = DebugProtocol.Message & Error;

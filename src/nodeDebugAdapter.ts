@@ -14,7 +14,7 @@ import * as fs from 'fs';
 import * as cp from 'child_process';
 import * as os from 'os';
 
-import { ILaunchRequestArguments, IAttachRequestArguments, ICommonRequestArgs } from './nodeDebugInterfaces';
+import { ILaunchRequestArguments, IAttachRequestArguments, ICommonRequestArgs, ILaunchVSCodeArguments, ILaunchVSCodeArgument } from './nodeDebugInterfaces';
 import * as pathUtils from './pathUtils';
 import * as utils from './utils';
 import * as errors from './errors';
@@ -33,6 +33,7 @@ const DefaultSourceMapPathOverrides: ISourceMapPathOverrides = {
 
 export class NodeDebugAdapter extends ChromeDebugAdapter {
     private static NODE = 'node';
+    private static RUNINTERMINAL_TIMEOUT = 5000;
     private static NODE_TERMINATION_POLL_INTERVAL = 3000;
     private static DEBUG_BRK_DEP_MSG = /\(node:\d+\) \[DEP0062\] DeprecationWarning: `node --inspect --debug-brk` is deprecated\. Please use `node --inspect-brk` instead\.\s*/;
 
@@ -63,6 +64,10 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
         return this._attachMode && !this.isExtensionHost();
     }
 
+    private get supportsTerminateRequest(): boolean {
+        return process.platform !== 'win32' && !this.isExtensionHost();
+    }
+
     public initialize(args: DebugProtocol.InitializeRequestArguments): DebugProtocol.Capabilities {
         this._adapterID = args.adapterID;
         this._promiseRejectExceptionFilterEnabled = this.isExtensionHost();
@@ -73,12 +78,16 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
 
         const capabilities = super.initialize(args);
         capabilities.supportsLogPoints = true;
-        capabilities.supportsTerminateRequest = process.platform !== 'win32' && !this.isExtensionHost();
+        capabilities.supportsTerminateRequest = this.supportsTerminateRequest;
 
         return capabilities;
     }
 
     public async launch(args: ILaunchRequestArguments): Promise<void> {
+        // if (typeof args.enableSourceMapCaching !== 'boolean') {
+        //     args.enableSourceMapCaching = this.isExtensionHost();
+        // }
+
         if (args.console && args.console !== 'internalConsole' && typeof args._suppressConsoleOutput === 'undefined') {
             args._suppressConsoleOutput = true;
         }
@@ -107,7 +116,7 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
                     return this.getNotExistErrorResponse('runtimeExecutable', runtimeExecutable);
                 }
 
-                if (runtimeExecutable.toLowerCase() === 'sqlops') {
+                if (runtimeExecutable.toLowerCase() === 'azuredatastudio') {
                     // should be under a /bin directory. Walk up to find the actual path
                     // Must transform and find the actual path
                     let lstat: fs.Stats = fs.lstatSync(re);
@@ -121,13 +130,13 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
                             re = path.join(dir, '..', '..', 'MacOS', 'Electron');
                             break;
                         case 'win32':
-                            re = path.join(dir, 'sqlops.exe');
+                            re = path.join(dir, 'azuredatastudio.exe');
                             break;
                         default:
-                            re = path.join(dir, 'sqlops');
+                            re = path.join(dir, 'azuredatastudio');
                             break;
                     }
-                    logger.log(`sqlops path is ${re}`);
+                    logger.log(`azuredatastudio path is ${re}`);
                 }
 
                 runtimeExecutable = re;
@@ -152,7 +161,7 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
         this._continueAfterConfigDone = !args.stopOnEntry;
 
         if (this.isExtensionHost()) {
-            return this.extensionHostLaunch(args, runtimeExecutable, port);
+            return this.extensionHostLaunch(args, port);
         }
         return Promise.reject('Only Azure Data Studio extension host develoment is supported');
 
@@ -171,7 +180,7 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
         //     }
 
         //     programPath = path.normalize(programPath);
-        //     if (pathUtils.normalizeDriveLetter(programPath) !== pathUtils.realPath(programPath)) {
+        //     if (pathUtils.normalizeDriveLetter(programPath) !== pathUtils.realCasePath(programPath)) {
         //         logger.warn(localize('program.path.case.mismatch.warning', 'Program path uses differently cased character as file on disk; this might result in breakpoints not being hit.'));
         //     }
         // }
@@ -192,12 +201,16 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
 
         //     // if working dir is given and if the executable is within that folder, we make the executable path relative to the working dir
         //     if (resolvedProgramPath) {
-        //         program = path.relative(cwd, resolvedProgramPath);
+        //         program = await pathUtils.isSymlinkedPath(cwd) ?
+        //             resolvedProgramPath :
+        //             path.relative(cwd, resolvedProgramPath);
         //     }
         // } else if (resolvedProgramPath) {
         //     // if no working dir given, we use the direct folder of the executable
         //     cwd = path.dirname(resolvedProgramPath);
-        //     program = path.basename(resolvedProgramPath);
+        //     program = await pathUtils.isSymlinkedPath(cwd) ?
+        //         resolvedProgramPath :
+        //         path.basename(resolvedProgramPath);
         // }
 
         // const runtimeArgs = args.runtimeArgs || [];
@@ -250,46 +263,104 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
         // }
     }
 
-    private extensionHostLaunch(args: ILaunchRequestArguments, runtimeExecutable: string, port: number): Promise<void> {
-        // we always launch in 'debug-brk' mode, but we only show the break event if 'stopOnEntry' attribute is true.
-        let launchArgs = [];
-        if (!args.noDebug) {
-            launchArgs.push(`--debugBrkPluginHost=${port}`);
+    // private extensionHostLaunch(args: ILaunchRequestArguments, runtimeExecutable: string, port: number): Promise<void> {
+    //     // we always launch in 'debug-brk' mode, but we only show the break event if 'stopOnEntry' attribute is true.
+    //     let launchArgs = [];
+    //     if (!args.noDebug) {
+    //         launchArgs.push(`--debugBrkPluginHost=${port}`);
 
-            // pass the debug session ID to the EH so that broadcast events know where they come from
-            if (args.__sessionId) {
-                launchArgs.push(`--debugId=${args.__sessionId}`);
+    //         // pass the debug session ID to the EH so that broadcast events know where they come from
+    //         if (args.__sessionId) {
+    //             launchArgs.push(`--debugId=${args.__sessionId}`);
+    //         }
+    //     }
+
+    //     const runtimeArgs = args.runtimeArgs || [];
+    //     const programArgs = args.args || [];
+
+    //     // if VS Code runs out of sources, add the path to the VS Code workspace as a first argument so that Electron turns into VS Code
+    //     const electronIdx = args.runtimeExecutable.indexOf(process.platform === 'win32' ? '\\.build\\electron\\' : '/.build/electron/');
+    //     if (electronIdx > 0 && programArgs.length > 0) {
+    //         // guess the VS Code workspace path
+    //         const vscodeWorkspacePath = args.runtimeExecutable.substr(0, electronIdx);
+
+    //         // only add path if user hasn't already added path
+    //         if (!programArgs[0].startsWith(vscodeWorkspacePath)) {
+    //             programArgs.unshift(vscodeWorkspacePath);
+    //         }
+    //     }
+
+    //     launchArgs = launchArgs.concat(runtimeArgs, programArgs);
+
+    //     const envArgs = this.collectEnvFileArgs(args) || args.env;
+    //     return this.launchInInternalConsole(runtimeExecutable, launchArgs, envArgs).then(() => {
+    //         return args.noDebug ?
+    //             Promise.resolve() :
+    //             this.doAttach(port, undefined, args.address, args.timeout);
+    //     });
+
+    // }
+
+    private extensionHostLaunch(launchArgs: ILaunchRequestArguments, debugPort: number): Promise<void> {
+
+        // Separate all "paths" from an arguments into separate attributes.
+        const args = launchArgs.args.map<ILaunchVSCodeArgument>(arg => {
+            if (arg.startsWith('-')) {
+                // arg is an option
+                const pair = arg.split('=', 2);
+                if (pair.length === 2 && fs.existsSync(pair[1])) {
+                    return { prefix: pair[0] + '=', path: pair[1] };
+                }
+                return { prefix: arg };
+            } else {
+                // arg is a path
+                try {
+                    const stat = fs.lstatSync(arg);
+                    if (stat.isDirectory()) {
+                        return { prefix: '--folder-uri=', path: arg };
+                    } else if (stat.isFile()) {
+                        return { prefix: '--file-uri=', path: arg };
+                    }
+                } catch (err) {
+                    // file not found
+                }
+                return { path: arg }; // just return the path blindly and hope for the best...
             }
+        });
+
+        if (!launchArgs.noDebug) {
+            args.unshift({ prefix: `--inspect-brk-extensions=${debugPort}` });
         }
 
-        const runtimeArgs = args.runtimeArgs || [];
-        const programArgs = args.args || [];
+        args.unshift({ prefix: `--debugId=${launchArgs.__sessionId}` });  // pass the debug session ID so that broadcast events know where they come from
 
-        // if VS Code runs out of sources, add the path to the VS Code workspace as a first argument so that Electron turns into VS Code
-        const electronIdx = args.runtimeExecutable.indexOf(process.platform === 'win32' ? '\\.build\\electron\\' : '/.build/electron/');
-        if (electronIdx > 0 && programArgs.length > 0) {
-            // guess the VS Code workspace path
-            const vscodeWorkspacePath = args.runtimeExecutable.substr(0, electronIdx);
+        const launchVSCodeArgs: ILaunchVSCodeArguments = {
+            args: args,
+            env: this.collectEnvFileArgs(launchArgs) || launchArgs.env
+        };
 
-            // only add path if user hasn't already added path
-            if (!programArgs[0].startsWith(vscodeWorkspacePath)) {
-                programArgs.unshift(vscodeWorkspacePath);
-            }
-        }
-
-        launchArgs = launchArgs.concat(runtimeArgs, programArgs);
-
-        const envArgs = this.collectEnvFileArgs(args) || args.env;
-        return this.launchInInternalConsole(runtimeExecutable, launchArgs, envArgs).then(() => {
-            return args.noDebug ?
-                Promise.resolve() :
-                this.doAttach(port, undefined, args.address, args.timeout);
+        return new Promise<void>((resolve, reject) => {
+            this._session.sendRequest('launchVSCode', launchVSCodeArgs, NodeDebugAdapter.RUNINTERMINAL_TIMEOUT, response => {
+                if (response.success) {
+                    if (response.body && typeof response.body.processId === 'number') {
+                        this._nodeProcessId = response.body.processId;
+                    }
+                    resolve();
+                } else {
+                    reject(errors.cannotDebugExtension(response.message));
+                    this.terminateSession('launchVSCode error: ' + response.message);
+                }
+            });
         });
 
     }
 
     public async attach(args: IAttachRequestArguments): Promise<void> {
         try {
+            if (typeof args.enableSourceMapCaching !== 'boolean') {
+                args.enableSourceMapCaching = true;
+            }
+
             return super.attach(args);
         } catch (err) {
             if (err.format && err.format.indexOf('Cannot connect to runtime process') >= 0) {
@@ -304,7 +375,8 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
     protected commonArgs(args: ICommonRequestArgs): void {
         args.sourceMapPathOverrides = getSourceMapPathOverrides(args.cwd, args.sourceMapPathOverrides);
         fixNodeInternalsSkipFiles(args);
-        args.showAsyncStacks = typeof args.showAsyncStacks === 'undefined' || args.showAsyncStacks;
+
+        args.smartStep = typeof args.smartStep === 'undefined' ? !this._isVSClient : args.smartStep;
 
         this._restartMode = args.restart;
         super.commonArgs(args);
@@ -350,7 +422,7 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
 
             // check whether there is one arg with a space
             const args: string[] = [];
-            for (const a of args) {
+            for (const a of launchArgs) {
                 if (a.indexOf(' ') > 0) {
                     args.push(`"${a}"`);
                     foundArgWithSpace = true;
@@ -367,6 +439,7 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
         }
 
         this.logLaunchCommand(runtimeExecutable, launchArgs);
+        spawnOpts.detached = this.supportsTerminateRequest; // https://github.com/Microsoft/vscode/issues/57018
         const nodeProcess = cp.spawn(runtimeExecutable, launchArgs, spawnOpts);
         return new Promise<void>((resolve, reject) => {
             this._nodeProcessId = nodeProcess.pid;
@@ -530,13 +603,26 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
     }
 
     public async terminate(args: DebugProtocol.TerminateArguments): Promise<void> {
+        this._clientRequestedSessionEnd = true;
         if (!this._attachMode && !(<ILaunchRequestArguments>this._launchAttachArgs).useWSL && this._nodeProcessId > 0) {
-            process.kill(this._nodeProcessId, 'SIGINT');
+            // -pid to kill the process group
+            // https://github.com/Microsoft/vscode/issues/57018
+            const groupPID = -this._nodeProcessId;
+
+            try {
+                logger.log(`Sending SIGINT to ${groupPID}`);
+                process.kill(groupPID, 'SIGINT');
+            } catch (e) {
+                if (e.message === 'kill ESRCH') {
+                    logger.log(`Got 'kill ESRCH'. Sending SIGINT to ${this._nodeProcessId}`);
+                    process.kill(this._nodeProcessId, 'SIGINT');
+                }
+            }
         }
     }
 
     public async terminateSession(reason: string, args?: DebugProtocol.DisconnectArguments): Promise<void> {
-        if (this.isExtensionHost() && args && typeof (<any>args).restart === 'boolean' && (<any>args).restart) {
+        if (this.isExtensionHost() && args && typeof args.restart === 'boolean' && args.restart) {
             this._nodeProcessId = 0;
         } else if (this._restartMode && !args)  {
             // If restart: true, only kill the process when the client has disconnected. 'args' present implies that a Disconnect request was received
@@ -544,7 +630,7 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
         }
 
         this.killNodeProcess();
-        const restartArgs = this._restartMode && !this._inShutdown ? { port: this._port } : undefined;
+        const restartArgs = this._restartMode && !this._clientRequestedSessionEnd ? { port: this._port } : undefined;
         return super.terminateSession(reason, undefined, restartArgs);
     }
 
@@ -626,8 +712,7 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
         const timeout = this._launchAttachArgs.timeout;
 
         // Wait longer in launch mode - it definitely should be paused.
-        let count = this._attachMode ?
-            10 :
+        let count = this.normalAttachMode ? 10 :
             (typeof timeout === 'number' ?
                 Math.floor(timeout / checkPausedInterval) :
                 100);
@@ -691,7 +776,7 @@ export class NodeDebugAdapter extends ChromeDebugAdapter {
 
     protected validateBreakpointsPath(args: ISetBreakpointsArgs): Promise<void> {
         return super.validateBreakpointsPath(args).catch(e => {
-            if (args.source.path && utils.isJavaScript(args.source.path)) {
+            if (!this._launchAttachArgs.disableOptimisticBPs && args.source.path && utils.isJavaScript(args.source.path)) {
                 return undefined;
             } else {
                 return Promise.reject(e);
@@ -878,7 +963,7 @@ const internalsRegex = new RegExp(`^${NodeDebugAdapter.NODE_INTERNALS}/(.*)`);
 function fixNodeInternalsSkipFilePattern(pattern: string): string {
     const internalsMatch = pattern.match(internalsRegex);
     if (internalsMatch) {
-        return `^(?!\/)(?![a-zA-Z]:)${CoreUtils.pathGlobToBlackboxedRegex(internalsMatch[1])}`;
+        return `^(?!\/)(?![a-zA-Z]:)(?!file:///)${CoreUtils.pathGlobToBlackboxedRegex(internalsMatch[1])}`;
     } else {
         return null;
     }
